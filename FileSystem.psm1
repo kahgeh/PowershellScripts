@@ -113,14 +113,9 @@ function Search-TextFiles
           $found+= [PSCustomObject]@{ File = $file; Matches = $details }
         } 
     
-        if( $found.Count -gt 0 ) 
+        if( $found.Count -gt 0 -and $asObject) 
         {
-          if ( -not($asObject) ){
-            Write-Host $found.File.FullName
-          }
-          else {
-            $found    
-          }
+          $found    
         }
       }
     }
