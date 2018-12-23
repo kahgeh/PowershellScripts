@@ -210,7 +210,7 @@ function Write-Pretty
     $afterPadLines = $lines[$match.End.LineNumber..$padEndLineIndex]
     $afterPadLines | ForEach-Object{ 
       $line=$_
-      Write-Host "$lineNumber      $line" 
+      Write-Host "$lineNumber     $line" 
       $lineNumber++
     }
   }
