@@ -51,7 +51,7 @@ function Measure-CharacterCountTillPosition
   })
 }
 
-function Search-FilesForText
+    function Search-FilesForText
 {
   param(
     [Parameter(Mandatory=$true)]
@@ -98,7 +98,7 @@ function Search-FilesForText
             }                        
             $end = [PSCustomObject]@{
               LineNumber = $linesBefore.Count + 1
-              LineIndex = $fileIndex - $indexOfStartOfLine
+              LineIndex = $fileIndex - $indexOfStartOfLine - 1
               FileIndex = $fileIndex
             } 
                        
@@ -148,10 +148,10 @@ function Write-Pretty
   if ( $match.Start.LineNumber -eq $match.End.LineNumber ){
     $line = $match.Lines[0]
     $firstBlock = $line.SubString(0,$match.Start.LineIndex)
-    $secondBlock = $line.SubString($match.Start.LineIndex, $match.End.LineIndex-$match.Start.LineIndex)
+    $secondBlock = $line.SubString($match.Start.LineIndex, $match.End.LineIndex-$match.Start.LineIndex+1)
     $thirdBlock = ''
     if ( $match.End.LineIndex+1 -lt ($line.Length-1)){
-      $thirdBlock = $line.SubString($match.End.LineIndex, $line.Length-$match.End.LineIndex)
+      $thirdBlock = $line.SubString($match.End.LineIndex+1, ($line.Length-1)-$match.End.LineIndex)
     }
 
     $lineNumber=$match.Start.LineNumber
@@ -196,11 +196,12 @@ function Write-Pretty
   }
 
   $line = $match.Lines | Select-Object -Last 1
-  $firstBlock = $line.SubString(0,$match.End.LineIndex)
+  $firstBlock = $line.SubString(0,$match.End.LineIndex+1)
   $lastIndex = $line.Length -1
+  $nextLineIndex = $match.End.LineIndex+1
   $secondBlock = ''
-  if ( $match.End.LineIndex+1 -lt $lastIndex ){
-    $secondBlock = $line.SubString($match.End.LineIndex+1, ($line.Length-1)-($match.End.LineIndex))
+  if ( $nextLineIndex -lt $lastIndex ){
+    $secondBlock = $line.SubString($nextLineIndex, ($line.Length-1)-($match.End.LineIndex))
   }
   Write-Host "$lineNumber     " -NoNewline
   Write-Host $firstBlock -NoNewline -ForegroundColor Black -BackgroundColor Gray
