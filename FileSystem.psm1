@@ -1,4 +1,4 @@
-function Search-LineText
+function Search-FileLinesForText
 {
   param(
     [Parameter(Mandatory=$true)]
@@ -51,7 +51,7 @@ function Measure-CharacterCountTillPosition
   })
 }
 
-function Search-TextFiles
+function Search-FilesForText
 {
   param(
     [Parameter(Mandatory=$true)]
@@ -59,9 +59,10 @@ function Search-TextFiles
     [Parameter(Mandatory=$true)]
     [string]
     $pattern,
+    $fileSpecification,
     [switch]$asObject)
  
-  Get-Childitem $location -recurse | ForEach-Object{
+  Get-Childitem $location -recurse @fileSpecification | ForEach-Object{
       if(-not $_.PSIsContainer)
       {
         $file = $_
