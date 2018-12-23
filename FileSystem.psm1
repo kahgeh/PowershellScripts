@@ -60,6 +60,7 @@ function Search-FilesForText
     [string]
     $pattern,
     $fileSpecification,
+    $padding=3,
     [switch]$asObject)
  
   Get-Childitem $location -recurse @fileSpecification | ForEach-Object{
@@ -107,7 +108,7 @@ function Search-FilesForText
           $details | ForEach-Object{ 
             $match = $_
             Write-Host "# at position $($match.Start.FileIndex) `n"
-            Write-Pretty $_ $lines 3
+            Write-Pretty $_ $lines $padding
             Write-Host "`n"
           }
           
@@ -194,9 +195,13 @@ function Write-Pretty
     }
   }
 
-  $line = $match.Lines[$match.lines.Length-1]
+  $line = $match.Lines | Select-Object -Last 1
   $firstBlock = $line.SubString(0,$match.End.LineIndex)
-  $secondBlock = $line.SubString($match.End.LineIndex, $line.Length-($match.End.LineIndex+1))
+  $lastIndex = $line.Length -1
+  $secondBlock = ''
+  if ( $match.End.LineIndex+1 -lt $lastIndex ){
+    $secondBlock = $line.SubString($match.End.LineIndex+1, ($line.Length-1)-($match.End.LineIndex))
+  }
   Write-Host "$lineNumber     " -NoNewline
   Write-Host $firstBlock -NoNewline -ForegroundColor Black -BackgroundColor Gray
   Write-Host $secondBlock -NoNewline -ForegroundColor White 

@@ -1,3 +1,13 @@
+
+if ($null -eq $global:Language){
+    $global:Language = @{
+        name = 'C#'
+        lookupPatternTemplate = 'class\W+[className]\W+{'
+        lookupIdentifierPlaceHolder= '[className]'
+        FileExtension = ".cs"
+    }
+}
+
 function Get-StringLiteralToVariableLookup
 {
     [CmdletBinding()]
@@ -105,7 +115,7 @@ function Convert-StringLiteralToVariable
 {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]
+        $className, 
         [Hashtable]
         $lookUp,
         [Parameter(ValueFromPipeline)]
@@ -117,6 +127,27 @@ function Convert-StringLiteralToVariable
         $replacementSpecification = @{},
         [switch] $save
     )
+
+    if ($null -ne $className -and ($null -eq $lookUp -or $null -eq $lookUp.Specification)){
+        $pattern=$Language.lookupPatternTemplate.Replace(
+            $Language.lookupIdentifierPlaceHolder,
+            $className)
+        $searchResult=@(Search-FilesForText ./ $pattern -fileSpecification @{Include="*$($Language.FileExtension)"} -asObject)
+        
+        $fileMatched=$searchResult[0].File.FullName
+
+        if ( $searchResult.Count -gt 1 ){
+            $selectedFileIndex= (Read-Host "More than one file found, pick 1..$($searchResult.Count)") -1
+            $fileMatched = $searchResult[$selectedFileIndex].File.FullName
+        }
+        
+        $lookUp=@{
+                    Specification=@{
+                        className=$className
+                        sourceFileName=$fileMatched
+                    }  
+                }  
+    }
 
     if ($null -ne $lookUp.Specification){
         $lookUpParams = $lookUp.Specification
