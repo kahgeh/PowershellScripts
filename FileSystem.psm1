@@ -224,4 +224,19 @@ function Write-Pretty
 
 }
 
+function Copy-FileCreatingDirectoryIfDoesNotExists
+{
+	param(
+		$srcFileRelativePath, 
+		$destPath )
+	
+	$targetFile=[IO.FileInfo](Join-Path $destPath $srcFileRelativePath)	
+	if ( -not $targetFile.Directory.Exists ){
+		New-Item -ItemType Directory $targetFile.Directory.FullName | Out-Null	
+		Write-Debug "Created directory $($targetFile.Directory.FullName)"	
+	}
+
+	Copy-Item -Force $srcFileRelativePath $targetFile.FullName		
+}
+
 Export-ModuleMember -Function *
