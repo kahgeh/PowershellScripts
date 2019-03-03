@@ -51,7 +51,7 @@ function Measure-CharacterCountTillPosition
   })
 }
 
-    function Search-FilesForText
+function Search-FilesForText
 {
   param(
     [Parameter(Mandatory=$true)]

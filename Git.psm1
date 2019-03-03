@@ -12,8 +12,10 @@ function Start-NewGitBranchRetainingSomeFiles
 
     $tmpFolder = $env:TEMP
     if ( [string]::IsNullOrEmpty($TEMP) ) {
-        $tmpFolder = Resolve-Path '~/Documents/tmp'
-    }
+		$homePath = Resolve-Path '~/'
+        $tmpFolder = Join-Path $homePath 'Documents/tmp'
+	}
+	
     if ( -not ( Test-Path $tmpFolder ) )
     {
         New-Item $tmpFolder -ItemType Directory | Out-Null
