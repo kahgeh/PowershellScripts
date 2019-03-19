@@ -197,8 +197,7 @@ function Update-Stack {
         $templateFilePath,  
         $parameterList, # e.g. key1=value1[comma]key2=value2
         $templateUrl,
-        $awsConfig,
-        $terminateOnCompletion = $false)
+        $awsConfig)
     $parameters = @{}
     if (-not([string]::IsNullOrEmpty($parameterList))) {
         $parameterList = $parameterList.Replace('[comma]', "`n")
@@ -265,11 +264,10 @@ function Update-Stack {
         if ($err.Exception.Message -like "*No updates are to be performed*") {
             Write-Host "No changes detected"
         }
-        Exit 1      
+        return 1      
     }
 
-    $exitCode = Wait-ForCfnCompletion $stackName $opStartDateTime $awsConfig
-    Exit $exitCode
+    Wait-ForCfnCompletion $stackName $opStartDateTime $awsConfig
 }
 
 function Get-CfnOutputValue {
