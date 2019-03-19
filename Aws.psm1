@@ -118,4 +118,165 @@ function Set-AwsServiceTaskDesiredCount {
     }
 }
 
+function ConvertTo-CfnParameters {
+    [OutputType([System.Collections.ArrayList])]
+    param($parameters = @{})
+    $parameterPairs = New-Object System.Collections.ArrayList
+    
+    if ($null -eq $parameters) {
+        return $parameterPairs
+    }
+    $parameters.GetEnumerator()|ForEach-Object { 
+        $parameter = New-Object Amazon.CloudFormation.Model.Parameter
+        $parameter.ParameterKey = $_.Key
+        $parameter.ParameterValue = $_.Value
+        $parameterPairs.Add($parameter) | Out-Null 
+    }
+    $parameterPairs
+}
+
+function Wait-ForCfnCompletion {
+    param(
+        $stackName,
+        $opStartDateTime,
+        $awsConfig
+    )
+    $staleEvents = New-Object System.Collections.ArrayList
+    while ($true) {
+        try {
+            $stack = Get-CFNStack $stackName @awsConfig
+            if ($stack.StackStatus -eq "CREATE_COMPLETE" -or $stack.StackStatus -eq "UPDATE_COMPLETE" ) {
+                if ($staleEvents.Count -gt 0) {Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig}
+                Write-Host "Final status - $($stack.StackStatus)"
+                return 0
+            }
+        
+            if ($stack.StackStatus -like "*FAIL*" -or $stack.StackStatus -like "*ROLLBACK*") {
+                if ($staleEvents.Count -gt 0) {Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig} 
+                Write-Host "Final status - $($stack.StackStatus)"
+                return 1
+            }
+        }
+        catch {
+            $currentError = $_
+            if ($currentError.Exception.Message.Contains('does not exist')) {
+                Write-Host 'Delete complete'
+                return 0
+            }
+            else {
+                Write-Error -Message $currentError.Exception.Message -ErrorAction Stop
+                return 1
+            }     
+        }
+        
+    
+        Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig
+        Start-Sleep -Seconds 1
+    }    
+}
+
+function Write-CfnProgress {
+    param( 
+        $stackName, 
+        $staleEvents, 
+        [DateTime] $opStartDateTime, 
+        $awsConfig)
+    $stackEvents = Get-CFNStackEvents -StackName $stackName @awsConfig
+    $newEvents = $stackEvents| Where-Object { $_.Timestamp -gt $opStartDateTime -and $staleEvents -notcontains $_.EventId} | Sort-Object -Property Timestamp 
+
+    $newEvents | ForEach-Object {
+        $event = $_
+        Write-Host "$($event.Timestamp) $($event.ResourceType) $($event.PhysicalResourceId) $($event.ResourceStatus)"    
+        $staleEvents.Add( $event.EventId )|Out-Null
+    }
+}
+
+function Update-Stack {
+    param(
+        $stackName, 
+        $templateFilePath,  
+        $parameterList, # e.g. key1=value1[comma]key2=value2
+        $templateUrl,
+        $awsConfig,
+        $terminateOnCompletion = $false)
+    $parameters = @{}
+    if (-not([string]::IsNullOrEmpty($parameterList))) {
+        $parameterList = $parameterList.Replace('[comma]', "`n")
+        $parameters = ConvertFrom-StringData $parameterList
+    }
+    
+    $argumentList = New-Object System.Collections.ArrayList
+    
+    # - get action ( create-stack or update-stack )
+    $action = 'update-stack'
+    try {
+        $stack = Get-CFNStack $stackName @awsConfig
+
+        if ( $null -eq $stack ) {
+            $action = 'create-stack'
+        }
+    }
+    catch {
+        $action = 'create-stack'
+    }
+    
+    # - get templatefilepath
+    if ([string]::IsNullOrEmpty($templateFilePath) -and [string]::IsNullOrEmpty($templateUrl)) {
+        throw "At least templateFilePath or templateUrl need to be specified"
+    }
+    if ([string]::IsNullOrEmpty($templateFilePath)) {
+        $templateFileName = "template.yml"
+        Invoke-WebRequest $templateUrl -OutFile "./$templateFileName"
+        $templateFilePath = "file://$templateFileName"
+    }
+    
+    # - save all required arguments
+    $stackParams = @{ 
+        StackName    = $stackName
+        TemplateBody = [IO.File]::ReadAllText( $templateFilePath)
+        Capability   = @('CAPABILITY_NAMED_IAM')
+        ProfileName  = $awsConfig.ProfileName
+        Region       = $awsConfig.Region 
+    }
+    
+    # - add parameters argument if any 
+    $parametersArguments = ConvertTo-CfnParameters $parameters
+    if ($parametersArguments.Length -gt 0) {
+        $stackParams.Add('Parameter', $parametersArguments) | Out-Null
+    }
+    
+    Write-Information "Sending request to $action ..."   
+
+    $opStartDateTime = [DateTime]::Now
+    try {
+        if ( $action -eq 'create-stack') {
+            Write-Host "Sending request to create stack..."
+            New-CFNStack @stackParams 
+            Write-Host "Completed sending request to create stack"
+        }
+        else {
+            Write-Host "Sending request to update stack..."
+            Update-CFNStack @stackParams
+            Write-Host "Completed sending request to update stack"
+        }
+    }
+    catch {
+        Write-Host $_.Exception.Message
+        if ($err.Exception.Message -like "*No updates are to be performed*") {
+            Write-Host "No changes detected"
+        }
+        Exit 1      
+    }
+
+    $exitCode = Wait-ForCfnCompletion $stackName $opStartDateTime $awsConfig
+    Exit $exitCode
+}
+
+function Get-CfnOutputValue {
+    param($name, $stackName, $awsConfig)
+
+    $stack = Get-CFNStack $stackName @awsConfig
+    $stack.Outputs | Where-Object {$_.OutputKey -eq $name } |Select-Object -ExpandProperty 'OutputValue'
+}
+
 Export-ModuleMember -Function *
