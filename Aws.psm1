@@ -92,8 +92,8 @@ function Get-AwsServices {
                     $taskDefinition = (Get-ECSTaskDefinitionDetail $task.TaskDefinitionArn).TaskDefinition
                     $ec2Instance = @(Get-ECSContainerInstanceDetail -Cluster $cluster.ClusterArn -ContainerInstance @($task.ContainerInstanceArn)).ContainerInstances 
                     $task = $task | 
-                        Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition
-                    Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance
+                        Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition |
+                        Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance
                     $tasks.Add($task)
                 }
                 $service |
@@ -181,7 +181,18 @@ function Write-CfnProgress {
         $staleEvents, 
         [DateTime] $opStartDateTime, 
         $awsConfig)
-    $stackEvents = Get-CFNStackEvents -StackName $stackName @awsConfig
+    
+    $stackEvents = @()    
+    try {
+        $stackEvents = Get-CFNStackEvents -StackName $stackName @awsConfig
+    }
+    catch {
+        if ($currentError.Exception.Message.Contains('does not exist')) {
+            Write-Host "Stack $stackName no longer exists"
+            return $false
+        }
+        throw $currentError
+    }
     $newEvents = $stackEvents| Where-Object { $_.Timestamp -gt $opStartDateTime -and $staleEvents -notcontains $_.EventId} | Sort-Object -Property Timestamp 
 
     $newEvents | ForEach-Object {
@@ -189,6 +200,7 @@ function Write-CfnProgress {
         Write-Host "$($event.Timestamp) $($event.ResourceType) $($event.PhysicalResourceId) $($event.ResourceStatus)"    
         $staleEvents.Add( $event.EventId )|Out-Null
     }
+    return $true
 }
 
 function Update-Stack {
@@ -197,14 +209,13 @@ function Update-Stack {
         $templateFilePath,  
         $parameterList, # e.g. key1=value1[comma]key2=value2
         $templateUrl,
-        $awsConfig)
+        $awsConfig,
+        $terminateOnCompletion = $false)
     $parameters = @{}
     if (-not([string]::IsNullOrEmpty($parameterList))) {
         $parameterList = $parameterList.Replace('[comma]', "`n")
         $parameters = ConvertFrom-StringData $parameterList
     }
-    
-    $argumentList = New-Object System.Collections.ArrayList
     
     # - get action ( create-stack or update-stack )
     $action = 'update-stack'
@@ -244,8 +255,6 @@ function Update-Stack {
         $stackParams.Add('Parameter', $parametersArguments) | Out-Null
     }
     
-    Write-Information "Sending request to $action ..."   
-
     $opStartDateTime = [DateTime]::Now
     try {
         if ( $action -eq 'create-stack') {
@@ -264,7 +273,7 @@ function Update-Stack {
         if ($err.Exception.Message -like "*No updates are to be performed*") {
             Write-Host "No changes detected"
         }
-        return 1      
+        return 0    
     }
 
     Wait-ForCfnCompletion $stackName $opStartDateTime $awsConfig
