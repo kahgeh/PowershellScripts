@@ -160,7 +160,7 @@ function Wait-ForCfnCompletion {
         catch {
             $currentError = $_
             if ($currentError.Exception.Message.Contains('does not exist')) {
-                Write-Host 'Delete complete'
+                Write-Information 'Stack does not exist detected'
                 return 0
             }
             else {
