@@ -118,6 +118,19 @@ function Set-AwsServiceTaskDesiredCount {
     }
 }
 
+function Restart-AwsServiceTask {
+    param(
+        [Parameter(Mandatory = $true)]
+        $serviceNames
+    )
+    @($serviceNames)|ForEach-Object {
+        $serviceName = $_
+        Set-AwsServiceTaskDesiredCount -serviceName $serviceName -Count 0
+        Set-AwsServiceTaskDesiredCount -serviceName $serviceName -Count 1
+    }
+
+}
+
 function ConvertTo-CfnParameters {
     [OutputType([System.Collections.ArrayList])]
     param($parameters = @{})
