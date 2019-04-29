@@ -94,9 +94,10 @@ function ConvertTo-NonBom {
         $destPath,
         $extension
     )
+    $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
     Get-ChildItem  $sourcePath | 
     Where-Object { $_.Extension -eq $extension } | 
-    ForEach-Object { [System.IO.File]::WriteAllLines("./$($_.Name)", (Get-Content $_.FullName), $Utf8NoBomEncoding) }
+    ForEach-Object { [System.IO.File]::WriteAllLines("$($destPath)/$($_.Name)", (Get-Content $_.FullName), $Utf8NoBomEncoding) }
 }
 
 Export-ModuleMember -Function *
