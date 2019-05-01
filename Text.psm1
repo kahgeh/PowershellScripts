@@ -61,14 +61,14 @@ function Convert-FromFixedWidthString {
         Write-Host "Total lines = $($lineNumber)"
     }
 }
-function Convert-ToBase64($string) {
+function ConvertTo-Base64($string) {
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($string);
     $encoded = [System.Convert]::ToBase64String($bytes); 
 
     return $encoded;
 }
 
-function Convert-FromBase64($string) {
+function ConvertFrom-Base64($string) {
     $bytes = [System.Convert]::FromBase64String($string);
     $decoded = [System.Text.Encoding]::UTF8.GetString($bytes); 
 

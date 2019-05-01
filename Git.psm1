@@ -99,5 +99,27 @@ function Set-RemoteRepository {
     git push -u origin $branchName
 }
 
+function Remove-Tag {
+    param(
+        [Parameter(Mandatory)]
+        $tag,
+        [Parameter(Mandatory)]
+        $repo,        
+        [Parameter(Mandatory)]
+        $org,
+        [Parameter(Mandatory)]
+        $token,
+        $baseUri = "api.github.com"
+    )
+    $basicToken = ConvertTo-Base64 "$($org):$($token)"
+    $headers = @{
+        "Content-Type"  = "application/json"
+        "Accept"        = "application/vnd.github.v3.full+json"
+        "Authorization" = "Basic $basicToken"        
+    }
+
+    $tagUrl = "https://$($baseUri)/repos/$($org)/$($repo)/git/refs/tags/$($tag)"
+    Invoke-WebRequest -Method DELETE -Headers $headers -Uri $tagUrl
+}
 
 Export-ModuleMember -Function * 
