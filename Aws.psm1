@@ -5,24 +5,24 @@ function Get-ProfileNames {
     $sectionHeaders = New-Object System.Collections.ArrayList
     $sourceProfileNames = New-Object System.Collections.ArrayList
     $config | 
-        ForEach-Object { 
+    ForEach-Object { 
         $profileSectionHeaderMatch = $profileSectionHeaderPattern.Match($_)
         if ( $profileSectionHeaderMatch.Success ) {
-            $sectionHeaders.Add($profileSectionHeaderMatch.Groups['name'].Value)|Out-Null;
+            $sectionHeaders.Add($profileSectionHeaderMatch.Groups['name'].Value) | Out-Null;
         }
     
         $sourceMatch = $sourcePattern.Match($_)
         if ($sourceMatch.Success) {
             $sourceProfileName = $sourceMatch.Groups['name'].Value
             if ( $sourceProfileName -notcontains $sourceProfileNames) {
-                $sourceProfileNames.Add($sourceProfileName)| Out-Null
+                $sourceProfileNames.Add($sourceProfileName) | Out-Null
             }
         }
     }    
     
     Compare-Object $sectionHeaders $sourceProfileNames |
-        Where-Object {$_.SideIndicator -eq '<='} |
-        Select-Object -ExpandProperty InputObject    
+    Where-Object { $_.SideIndicator -eq '<=' } |
+    Select-Object -ExpandProperty InputObject    
 }
 
 function Use-AwsProfile {
@@ -36,16 +36,24 @@ function Use-AwsProfile {
     Invoke-Expression $Cmd   
 }
 
+function Get-AwsEnvVarsAsJson {
+    param($profileName)
+    awsweb env $profileName | 
+    ForEach-Object { 
+        $_ -match 'export (?<key>[_|\w]+)="(?<value>.+)"' | Out-Null; "`"$($matches['key'])`" : `"$($matches['value'])`"," 
+    }    
+}
+
 function Get-AwsServiceTasks {
     param($serviceName)
 
     Get-ECSClusterList | ForEach-Object {
         $cluster = (Get-ECSClusterDetail $_).Clusters
         $clusterServices = Get-ECSClusterService -Cluster $cluster.ClusterArn
-        $clusterServices| ForEach-Object {
+        $clusterServices | ForEach-Object {
             $services = (Get-ECSService -Service $_ -Cluster $cluster.ClusterName).Services
             if ( $null -ne $serviceName ) {
-                $services = @($services| Where-Object {$_.ServiceName.Contains($serviceName)})
+                $services = @($services | Where-Object { $_.ServiceName.Contains($serviceName) })
             }
             $services | ForEach-Object {
                 $service = $_
@@ -56,10 +64,10 @@ function Get-AwsServiceTasks {
                     $taskDefinition = (Get-ECSTaskDefinitionDetail $task.TaskDefinitionArn).TaskDefinition
                     $ec2Instance = @(Get-ECSContainerInstanceDetail -Cluster $cluster.ClusterArn -ContainerInstance @($task.ContainerInstanceArn)).ContainerInstances 
                     $task | 
-                        Add-Member -PassThru -MemberType NoteProperty Cluster -Value $cluster |
-                        Add-Member -PassThru -MemberType NoteProperty Service -Value $service |
-                        Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance |
-                        Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition
+                    Add-Member -PassThru -MemberType NoteProperty Cluster -Value $cluster |
+                    Add-Member -PassThru -MemberType NoteProperty Service -Value $service |
+                    Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance |
+                    Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition
                 }
             }
         }
@@ -77,10 +85,10 @@ function Get-AwsServices {
         if ($null -ne $clusterName) {
             $clusterServices = $clusterServices | Where-Object { $_.ClusterName -eq $clusterName }
         }
-        $clusterServices| ForEach-Object {
+        $clusterServices | ForEach-Object {
             $services = (Get-ECSService -Service $_ -Cluster $cluster.ClusterName).Services
             if ( $null -ne $serviceName ) {
-                $services = @($services| Where-Object {$_.ServiceName.Contains($serviceName)})
+                $services = @($services | Where-Object { $_.ServiceName.Contains($serviceName) })
             }
             $services | ForEach-Object {
                 $service = $_
@@ -92,13 +100,13 @@ function Get-AwsServices {
                     $taskDefinition = (Get-ECSTaskDefinitionDetail $task.TaskDefinitionArn).TaskDefinition
                     $ec2Instance = @(Get-ECSContainerInstanceDetail -Cluster $cluster.ClusterArn -ContainerInstance @($task.ContainerInstanceArn)).ContainerInstances 
                     $task = $task | 
-                        Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition |
-                        Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance
+                    Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition |
+                    Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance
                     $tasks.Add($task)
                 }
                 $service |
-                    Add-Member -PassThru -MemberType NoteProperty Cluster -Value $cluster |
-                    Add-Member -PassThru -MemberType NoteProperty Tasks -Value $tasks
+                Add-Member -PassThru -MemberType NoteProperty Cluster -Value $cluster |
+                Add-Member -PassThru -MemberType NoteProperty Tasks -Value $tasks
             }
         }
     }
@@ -123,7 +131,7 @@ function Restart-AwsServiceTask {
         [Parameter(Mandatory = $true)]
         $serviceNames
     )
-    @($serviceNames)|ForEach-Object {
+    @($serviceNames) | ForEach-Object {
         $serviceName = $_
         Set-AwsServiceTaskDesiredCount -serviceName $serviceName -Count 0
         Set-AwsServiceTaskDesiredCount -serviceName $serviceName -Count 1
@@ -133,13 +141,13 @@ function Restart-AwsServiceTask {
 
 function ConvertTo-CfnParameters {
     [OutputType([System.Collections.ArrayList])]
-    param($parameters = @{})
+    param($parameters = @{ })
     $parameterPairs = New-Object System.Collections.ArrayList
     
     if ($null -eq $parameters) {
         return $parameterPairs
     }
-    $parameters.GetEnumerator()|ForEach-Object { 
+    $parameters.GetEnumerator() | ForEach-Object { 
         $parameter = New-Object Amazon.CloudFormation.Model.Parameter
         $parameter.ParameterKey = $_.Key
         $parameter.ParameterValue = $_.Value
@@ -159,13 +167,13 @@ function Wait-ForCfnCompletion {
         try {
             $stack = Get-CFNStack $stackName @awsConfig
             if ($stack.StackStatus -eq "CREATE_COMPLETE" -or $stack.StackStatus -eq "UPDATE_COMPLETE" ) {
-                if ($staleEvents.Count -gt 0) {Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig}
+                if ($staleEvents.Count -gt 0) { Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig }
                 Write-Host "Final status - $($stack.StackStatus)"
                 return 0
             }
         
             if ($stack.StackStatus -like "*FAIL*" -or $stack.StackStatus -like "*ROLLBACK*") {
-                if ($staleEvents.Count -gt 0) {Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig} 
+                if ($staleEvents.Count -gt 0) { Write-CfnProgress $stackName $staleEvents $opStartDateTime $awsConfig } 
                 Write-Host "Final status - $($stack.StackStatus)"
                 return 1
             }
@@ -206,12 +214,12 @@ function Write-CfnProgress {
         }
         throw $currentError
     }
-    $newEvents = $stackEvents| Where-Object { $_.Timestamp -gt $opStartDateTime -and $staleEvents -notcontains $_.EventId} | Sort-Object -Property Timestamp 
+    $newEvents = $stackEvents | Where-Object { $_.Timestamp -gt $opStartDateTime -and $staleEvents -notcontains $_.EventId } | Sort-Object -Property Timestamp 
 
     $newEvents | ForEach-Object {
         $event = $_
         Write-Host "$($event.Timestamp) $($event.ResourceType) $($event.PhysicalResourceId) $($event.ResourceStatus)"    
-        $staleEvents.Add( $event.EventId )|Out-Null
+        $staleEvents.Add( $event.EventId ) | Out-Null
     }
     return $true
 }
@@ -224,7 +232,7 @@ function Update-Stack {
         $templateUrl,
         $awsConfig,
         $terminateOnCompletion = $false)
-    $parameters = @{}
+    $parameters = @{ }
     if (-not([string]::IsNullOrEmpty($parameterList))) {
         $parameterList = $parameterList.Replace('[comma]', "`n")
         $parameters = ConvertFrom-StringData $parameterList
@@ -296,7 +304,7 @@ function Get-CfnOutputValue {
     param($name, $stackName, $awsConfig)
 
     $stack = Get-CFNStack $stackName @awsConfig
-    $stack.Outputs | Where-Object {$_.OutputKey -eq $name } |Select-Object -ExpandProperty 'OutputValue'
+    $stack.Outputs | Where-Object { $_.OutputKey -eq $name } | Select-Object -ExpandProperty 'OutputValue'
 }
 
 Export-ModuleMember -Function *
