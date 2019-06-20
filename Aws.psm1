@@ -28,12 +28,15 @@ function Get-ProfileNames {
 function Use-AwsProfile {
     param(
         [Parameter(Mandatory = $true)]
-        $profileName
+        $profileName,
+        $shell = 'powershell'
     )
     Set-AWSCredential -StoredCredentials $profileName
-    awsweb env --shell powershell $profileName
-    $Cmd = (awsweb env --shell powershell $profileName) | Out-String
-    Invoke-Expression $Cmd   
+    awsweb env --shell $shell $profileName
+    $Cmd = (awsweb env --shell $shell $profileName) | Out-String
+    if ( $shell -eq 'powershell') {
+        Invoke-Expression $Cmd   
+    }
 }
 
 function Get-AwsEnvVarsAsJson {
