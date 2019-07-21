@@ -328,4 +328,41 @@ function Get-CfnOutputValue {
     $stack.Outputs | Where-Object { $_.OutputKey -eq $name } | Select-Object -ExpandProperty 'OutputValue'
 }
 
+function Invoke-AwsShellScript {
+    param(
+        [Parameter(Mandatory)] 
+        [System.Collections.ArrayList] $scriptTexts,
+        
+        [Parameter(Mandatory)] 
+        $instanceId,
+
+        $maxResponseWaitLoopCount = 5,
+        $responseWaitSleepInSeconds = 5,
+        $comments = $scriptTexts[0].SubString(0, $(if ($scriptTexts[0].Length -gt 25) { 25 }else { $scriptTexts[0].Length }))
+
+    )
+
+    $runPSCommand = Send-SSMCommand -InstanceId @($instanceId) -DocumentName AWS-RunShellScript -Comment $comments -Parameter @{'commands' = $scriptTexts }
+
+    $response = Get-SSMCommandInvocation -CommandId $runPSCommand.CommandId -Details $true | Select-Object -ExpandProperty CommandPlugins
+
+    Write-Host 'Running script ...'
+    $count = 0
+    while ($response.Status -eq 'InProgress') {
+        $count++
+        if ($count -gt $maxResponseWaitLoopCount) {
+            Write-Error 'Timed out, consider increasing the maxResponseWaitLoopCount'
+            break;
+        }
+        Start-Sleep -Seconds $responseWaitSleepInSeconds
+        Write-Host '.' -NoNewline
+        $response = Get-SSMCommandInvocation -CommandId $runPSCommand.CommandId -Details $true | Select-Object -ExpandProperty CommandPlugins
+    }
+    Write-Host 'Completed running script'
+    if ($response.Status -ne 'Success') {
+        throw $response.StatusDetails
+    }
+    $response.Output
+}
+
 Export-ModuleMember -Function *
