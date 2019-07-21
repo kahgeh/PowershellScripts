@@ -48,32 +48,42 @@ function Get-AwsEnvVarsAsJson {
 }
 
 function Get-AwsServiceTasks {
-    param($serviceName)
+    param(
+        $serviceName,
+        $clusterName
+    )
 
-    Get-ECSClusterList | ForEach-Object {
-        $cluster = (Get-ECSClusterDetail $_).Clusters
-        $clusterServices = Get-ECSClusterService -Cluster $cluster.ClusterArn
-        $clusterServices | ForEach-Object {
-            $services = (Get-ECSService -Service $_ -Cluster $cluster.ClusterName).Services
-            if ( $null -ne $serviceName ) {
-                $services = @($services | Where-Object { $_.ServiceName.Contains($serviceName) })
-            }
-            $services | ForEach-Object {
-                $service = $_
-                $taskArns = Get-ECSTaskList -Cluster $cluster.ClusterName -ServiceName $service.ServiceName
-                $taskArns | ForEach-Object {
-                    $taskArn = $_    
-                    $task = (Get-ECSTaskDetail -Cluster $cluster.ClusterName -Task $taskArn).Tasks
-                    $taskDefinition = (Get-ECSTaskDefinitionDetail $task.TaskDefinitionArn).TaskDefinition
-                    $ec2Instance = @(Get-ECSContainerInstanceDetail -Cluster $cluster.ClusterArn -ContainerInstance @($task.ContainerInstanceArn)).ContainerInstances 
-                    $task | 
-                    Add-Member -PassThru -MemberType NoteProperty Cluster -Value $cluster |
-                    Add-Member -PassThru -MemberType NoteProperty Service -Value $service |
-                    Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance |
-                    Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition
-                }
-            }
+    $services = Get-AwsServices -serviceName $serviceName -clusterName $clusterName
+    $services | ForEach-Object {
+        $service = $_
+        $service.Tasks | ForEach-Object {
+            $task = $_
+            $task |
+            Add-Member -PassThru -MemberType NoteProperty Cluster -Value $service.Cluster |
+            Add-Member -PassThru -MemberType NoteProperty Service -Value $service 
         }
+    }
+}
+
+function Get-ClusterArns {
+    param ( $clusterName )
+
+    $allClusterArns = Get-ECSClusterList
+    if ($null -ne $clusterName) {
+        $allClusterArns | Where-Object { $_.EndsWith($clusterName) }
+        return 
+    }
+    $allClusterArns
+    return
+}
+
+function Get-Clusters {
+    param(
+        [Parameter( Mandatory = $true )]
+        [System.Collections.ArrayList] $clusterArns )
+
+    $clusterArns | % {
+        Get-ECSClusterDetail $_
     }
 }
 
@@ -81,31 +91,39 @@ function Get-AwsServices {
     param ( 
         $serviceName,
         $clusterName )
+    
+    $clusterArns = Get-ClusterArns $clusterName
+    $clusters = Get-Clusters $clusterArns
 
-    Get-ECSClusterList | ForEach-Object {
-        $cluster = (Get-ECSClusterDetail $_).Clusters
+    $clusters | ForEach-Object {
+        $cluster = $_.Clusters | Select-Object -First 1
+        Write-Information -Message "Calling Get-ECSClusterService for $($cluster.ClusterName)" 
         $clusterServices = Get-ECSClusterService -Cluster $cluster.ClusterArn
-        if ($null -ne $clusterName) {
-            $clusterServices = $clusterServices | Where-Object { $_.ClusterName -eq $clusterName }
-        }
+        if ( $null -ne $serviceName ) {
+            $clusterServices = @($clusterServices | Where-Object { $_.Contains($serviceName) })
+        }      
         $clusterServices | ForEach-Object {
+            Write-Information -Message "Calling Get-ECSService for $($cluster.ClusterName) - $($_)" 
             $services = (Get-ECSService -Service $_ -Cluster $cluster.ClusterName).Services
             if ( $null -ne $serviceName ) {
                 $services = @($services | Where-Object { $_.ServiceName.Contains($serviceName) })
             }
             $services | ForEach-Object {
                 $service = $_
+                Write-Information -Message "Calling Get-ECSTaskList for $($service.ServiceName) - $($cluster.ClusterName)"                 
                 $taskArns = Get-ECSTaskList -Cluster $cluster.ClusterName -ServiceName $service.ServiceName
                 $tasks = New-Object System.Collections.ArrayList
                 $taskArns | ForEach-Object {
-                    $taskArn = $_    
+                    $taskArn = $_
+                    Write-Information -Message "Calling Get-ECSTaskDetail for $($tarskArn) - $($service.ServiceName) - $($cluster.ClusterName) "      
                     $task = (Get-ECSTaskDetail -Cluster $cluster.ClusterName -Task $taskArn).Tasks
+                    Write-Information -Message "Calling Get-ECSTaskDefinitionDetail for $($tarskArn) - $($service.ServiceName) - $($cluster.ClusterName) "
                     $taskDefinition = (Get-ECSTaskDefinitionDetail $task.TaskDefinitionArn).TaskDefinition
                     $ec2Instance = @(Get-ECSContainerInstanceDetail -Cluster $cluster.ClusterArn -ContainerInstance @($task.ContainerInstanceArn)).ContainerInstances 
                     $task = $task | 
                     Add-Member -PassThru -MemberType NoteProperty Definition -Value $taskDefinition |
                     Add-Member -PassThru -MemberType NoteProperty Host -Value $ec2Instance
-                    $tasks.Add($task)
+                    $tasks.Add($task) | Out-Null
                 }
                 $service |
                 Add-Member -PassThru -MemberType NoteProperty Cluster -Value $cluster |
