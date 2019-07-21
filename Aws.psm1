@@ -338,27 +338,27 @@ function Invoke-AwsShellScript {
 
         $maxResponseWaitLoopCount = 5,
         $responseWaitSleepInSeconds = 5,
-        $comments = $scriptTexts[0].SubString(0, $(if ($scriptTexts[0].Length -gt 25) { 25 }else { $scriptTexts[0].Length }))
-
+        $comments = $scriptTexts[0].SubString(0, $(if ($scriptTexts[0].Length -gt 25) { 25 }else { $scriptTexts[0].Length })),
+        $type = 'AWS-RunShellScript'
     )
 
-    $runPSCommand = Send-SSMCommand -InstanceId @($instanceId) -DocumentName AWS-RunShellScript -Comment $comments -Parameter @{'commands' = $scriptTexts }
+    $runPSCommand = Send-SSMCommand -InstanceId @($instanceId) -DocumentName $type -Comment $comments -Parameter @{'commands' = $scriptTexts }
 
     $response = Get-SSMCommandInvocation -CommandId $runPSCommand.CommandId -Details $true | Select-Object -ExpandProperty CommandPlugins
 
-    Write-Host 'Running script ...'
+    Write-Host "`nRunning script ..." -NoNewline
     $count = 0
     while ($response.Status -eq 'InProgress') {
         $count++
         if ($count -gt $maxResponseWaitLoopCount) {
-            Write-Error 'Timed out, consider increasing the maxResponseWaitLoopCount'
+            Write-Error "`nTimed out, consider increasing the maxResponseWaitLoopCount"
             break;
         }
         Start-Sleep -Seconds $responseWaitSleepInSeconds
         Write-Host '.' -NoNewline
         $response = Get-SSMCommandInvocation -CommandId $runPSCommand.CommandId -Details $true | Select-Object -ExpandProperty CommandPlugins
     }
-    Write-Host 'Completed running script'
+    Write-Host "`nCompleted running script"
     if ($response.Status -ne 'Success') {
         throw $response.StatusDetails
     }
