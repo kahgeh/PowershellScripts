@@ -365,4 +365,78 @@ function Invoke-AwsShellScript {
     $response.Output
 }
 
+function Get-PstoreValues {
+    param(
+        [System.Collections.ArrayList]
+        $paths
+    )
+    
+    $parameters = Get-PstoreParameters $paths
+
+    $parameters | Group-Object Name | Select-Object -ExpandProperty Group | ForEach-Object {
+        [PSCustomObject]@{
+            Name  = $_.Name
+            Value = $_.Value
+        }
+    }
+}
+
+function Get-PstoreParameters {
+    param(
+        [System.Collections.ArrayList]
+        $paths,
+        [switch]
+        $includeKeyId
+    )
+    
+    $result = $paths | ForEach-Object {
+        $path = $_
+        Write-Debug 'Getting parameter by path...'
+        $queryResult = aws ssm get-parameters-by-path --path $path --recursive --with-decryption | ConvertFrom-Json
+        Write-Debug 'Completed getting parameter by path'
+        if ($null -ne $queryResult -and $queryResult.Parameters.Length -gt 0 ) {
+            $queryResult
+        }
+        else {
+            Write-Debug 'Getting parameter by name...'
+            aws ssm get-parameters --names $path --with-decryption | ConvertFrom-Json
+            Write-Debug 'Completed getting parameter by name'
+        }
+    }
+    $parameters = $result.Parameters
+
+    if ( -not $includeKeyId ) {
+        $parameters
+    }
+    else {
+        $parameterNames = @($parameters | Select-Object -ExpandProperty Name)
+        $metaDataResult = aws ssm describe-parameters --filters "Key=Name,Values=$([string]::Join(',',$parameterNames))" | ConvertFrom-Json
+        $parameters | ForEach-Object {
+            $param = $_
+            $paramMetaData = $metaDataResult.Parameters | Where-Object { $_.Name -eq $param.Name }
+            $param | Add-Member -NotePropertyName KeyId -NotePropertyValue $paramMetaData.KeyId  -PassThru
+        }
+    }
+}
+
+function Copy-PstoreEntries {
+    param(
+        [System.Collections.ArrayList]
+        $oldToNewNameMap
+    )
+
+    $oldParameterNames = $oldToNewNameMap | ForEach-Object { $_.Old }
+    Write-Information 'Getting old parameters...'
+    $oldParameters = Get-PstoreParameters $oldParameterNames -includeKeyId
+    Write-Information 'Completed getting old parameters'
+    $oldToNewNameMap | ForEach-Object {
+        $oldName = $_.Old
+        $newName = $_.New
+        $param = $oldParameters | Where-Object { $_.Name -eq $oldName } | Select-Object -First 1
+        Write-Information "Saving $oldName to $newName ..."
+        $saveResult = aws ssm put-parameter --name $newName --value $param.Value --type $param.Type --key-id $param.KeyId --overwrite | ConvertFrom-Json
+        Write-Information "Completed saving $oldName to $newName (version = $($saveResult.Version))"
+    }
+}
+
 Export-ModuleMember -Function *
