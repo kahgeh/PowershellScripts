@@ -439,4 +439,24 @@ function Copy-PstoreEntries {
     }
 }
 
+function Save-PstoreValue {
+    param(
+        $name,
+        $value,
+        $type = 'String'
+    )
+
+    aws ssm put-parameter --name $name --value $value --type $type --overwrite         
+}
+
+function Save-PstoreSecret {
+    param(
+        $name,
+        $value,
+        $keyid = 'aws/ssm'
+    )
+
+    aws ssm put-parameter --name $name --value $value --type 'SecureString' --key-id $keyid --overwrite 
+}
+
 Export-ModuleMember -Function *
