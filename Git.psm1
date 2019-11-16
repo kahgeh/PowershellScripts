@@ -118,8 +118,20 @@ function Remove-Tag {
         "Authorization" = "Basic $basicToken"        
     }
 
+    #enterprise /api/v3/repos/$($org)/$($repo)/git/refs/tags/$($tag)"
     $tagUrl = "https://$($baseUri)/repos/$($org)/$($repo)/git/refs/tags/$($tag)"
     Invoke-WebRequest -Method DELETE -Headers $headers -Uri $tagUrl
+}
+
+function Set-Branch {
+    param(
+        $branchName,
+        $createNewIfDoesNotExits = $true
+    )
+    if ($createNewIfDoesNotExits) {
+        git branch $branchName
+    }
+    git checkout $branchName
 }
 
 Export-ModuleMember -Function * 
