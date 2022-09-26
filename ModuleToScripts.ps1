@@ -3,7 +3,7 @@ param(
     $targetFolderPath
 )
 
-Get-Command -Module $moduleName | ForEach-Object {
+  Get-Command -Module $moduleName | ForEach-Object {
     $command = $_
     $scriptFileName = Join-Path $targetFolderPath "$($command.Name).ps1"
         
